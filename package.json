@@ -1,0 +1,9 @@
+{
+  "name": "ns-os-private-url-mcp",
+  "version": "2.0.0",
+  "description": "North Star OS Chief of Staff MCP server — rebuilt 2026-08-09 after original source was lost (deployed from an ephemeral sandbox with no retained copy). See REF-cos-mcp-server-architecture and doc 70 (rebuild plan/log) for full history.",
+  "type": "module",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  }
+}
