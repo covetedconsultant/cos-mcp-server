@@ -119,6 +119,7 @@ const TOOLS = [
   { name: "get_my_dream100_status", description: "Returns the caller's Dream 100 roster/status.", inputSchema: { type: "object", properties: {} } },
   { name: "get_onboarding_status", description: "Reports whether the caller has a clients row, whether they're onboarded, and which onboarding step to resume from.", inputSchema: { type: "object", properties: {} } },
   { name: "get_my_workflows", description: "Returns the protocols/workflows pushed to the caller (from action_registry).", inputSchema: { type: "object", properties: {} } },
+  { name: "get_my_decisions", description: "Returns the caller's own decision log rows (decisions table), most recent first.", inputSchema: { type: "object", properties: { limit: { type: "number", description: "optional, defaults to all" } } } },
   { name: "capture_note", description: "Write tool. Captures a decision, follow-up, or contact-update note, scoped to the caller's own client_id.", inputSchema: { type: "object", properties: { note_content: { type: "string" }, tags: { type: "string" } }, required: ["note_content"] } },
   { name: "set_my_sweep_time", description: "Write tool. Sets the scheduled day/time for one of the caller's own sweeps in sweep_schedules, scoped to the caller's own client_id. Upserts by (client_id, sweep_name).", inputSchema: { type: "object", properties: { sweep_name: { type: "string", description: "e.g. Content Sweep" }, scheduled_time: { type: "string", description: "HH:MM:SS, 24-hour" }, scheduled_days: { type: "array", items: { type: "string" }, description: "e.g. [\"Monday\"]" }, timezone: { type: "string", description: "e.g. America/New_York, optional, defaults to caller's existing timezone" } }, required: ["sweep_name", "scheduled_time", "scheduled_days"] } },
   { name: "set_my_quarter", description: "Write tool. Copies a quarter's dates onto the caller's own review_schedule row. Upserts by (client_id, quarter, year).", inputSchema: { type: "object", properties: { quarter: { type: "string" }, year: { type: "number" }, starts_on: { type: "string" }, ends_on: { type: "string" }, day_1_date: { type: "string" }, day_2_date: { type: "string" }, day_3_date: { type: "string" }, day_4_date: { type: "string" } }, required: ["quarter", "year", "starts_on", "ends_on", "day_1_date", "day_2_date"] } },
@@ -256,6 +257,22 @@ async function callTool(name, args, client, supabase) {
         .eq("client_id", client.id)
         .order("created_at", { ascending: false })
         .limit(20);
+      if (error) throw new Error(error.message);
+      return data || [];
+    }
+
+    case "get_my_decisions": {
+      // NEW 2026-08-24 — built for co-29 (Command Center Decision Log
+      // section). `decisions` has a real client_id column (confirmed via
+      // schema read), so this scopes cleanly like every other tool here.
+      const { limit } = args;
+      let query = supabase
+        .from("decisions")
+        .select("date, text, source, stage, box")
+        .eq("client_id", client.id)
+        .order("date", { ascending: false });
+      if (limit) query = query.limit(limit);
+      const { data, error } = await query;
       if (error) throw new Error(error.message);
       return data || [];
     }
