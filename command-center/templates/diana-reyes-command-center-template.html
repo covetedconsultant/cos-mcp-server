@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Command Center — Diana Reyes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ===== Single authoritative palette — dashboard-08-visual-style-spec.md ===== */
+  :root{
+    --bg:#F7F5F0; --card:#FFF; --ink:#22201B; --ink-dim:#6B6659; --ink-faint:#A39D8C;
+    --line:#E4E0D5; --sage:#5C7A5E; --sage-soft:#E4EBE1; --gold:#A9822E; --gold-soft:#F2EAD5;
+    --clay:#B5562E; --clay-soft:#F1E2D8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;padding:0;}
+  .tabular{font-variant-numeric:tabular-nums;}
+  a.link{color:var(--clay);text-decoration:none;font-weight:600;cursor:pointer;}
+  a.link:hover{text-decoration:underline;}
+
+  /* ===== Top navigation strip — this is the new, real linking mechanism ===== */
+  .nav-strip{
+    background:var(--ink); color:var(--bg); padding:12px 20px; display:flex; align-items:center;
+    gap:16px; font-size:12.5px; position:sticky; top:0; z-index:10; flex-wrap:wrap;
+  }
+  .nav-strip .nav-label{color:var(--ink-faint); text-transform:uppercase; letter-spacing:.06em; font-size:10.5px; font-weight:700;}
+  .nav-strip button{
+    background:none; border:1px solid rgba(247,245,240,.25); color:var(--bg); font-family:'Inter',sans-serif;
+    font-size:12.5px; padding:5px 12px; border-radius:20px; cursor:pointer;
+  }
+  .nav-strip button.active{background:var(--bg); color:var(--ink); border-color:var(--bg); font-weight:600;}
+  .nav-strip button:hover:not(.active){border-color:var(--bg);}
+
+  .page{max-width:900px;margin:0 auto;padding:30px 20px 90px;}
+  .page-narrow{max-width:720px;}
+
+  .view{display:none;}
+  .view.active{display:block;}
+
+  .banner{background:var(--gold-soft); color:var(--gold); font-size:12px; font-weight:500; padding:10px 16px; border-radius:8px; margin-bottom:20px; text-align:center;}
+
+  .card{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px 22px; margin-bottom:18px;}
+  .section-label{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-faint); margin:26px 0 10px;}
+  .section-label:first-of-type{margin-top:0;}
+
+  /* North Star / Panel A */
+  .ns-greeting h1{font-family:'Fraunces',serif; font-weight:600; font-size:24px; margin-bottom:4px;}
+  .ns-date{font-size:13px; color:var(--ink-dim);}
+  .ns-header{display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex-wrap:wrap;}
+  .ns-countdown{text-align:right; flex-shrink:0;}
+  .ns-countdown .days{font-family:'Fraunces',serif; font-size:26px; font-weight:600; color:var(--clay);}
+  .ns-countdown .days-label{font-size:12px; color:var(--ink-dim);}
+  .ns-countdown .review-date{font-size:11px; color:var(--ink-faint); margin-top:4px; padding-top:4px; border-top:1px solid var(--line);}
+  .ns-mission{font-family:'Fraunces',serif; font-size:16px; line-height:1.5; margin-top:16px;}
+
+  /* North Star Documents tracker */
+  .mockup-flag{
+    font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; font-weight:700;
+    color:var(--clay); background:var(--clay-soft); display:inline-block; padding:3px 10px;
+    border-radius:20px; margin-bottom:14px;
+  }
+  .tracker-wrap{display:flex; gap:18px; margin-top:4px; flex-wrap:wrap;}
+  .tracker-rail{
+    flex:0 0 120px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; gap:8px; padding:12px 8px; border-radius:6px; border:1px dashed var(--line);
+  }
+  .tracker-rail .title{font-family:'Fraunces',serif; font-size:13px; font-weight:600;}
+  .tracker-table{flex:1; min-width:280px;}
+  .tracker-headers, .tracker-row{display:grid; grid-template-columns:64px repeat(4,1fr); gap:8px; margin-bottom:8px; align-items:center;}
+  .tracker-headers .q-head{text-align:center; font-size:10.5px; font-weight:700; color:var(--ink-dim);}
+  .tracker-row-label{font-size:10px; text-transform:uppercase; letter-spacing:.05em; font-weight:700; color:var(--ink-faint); text-align:right; padding-right:4px;}
+  .tracker-cell{border-radius:6px; padding:9px 6px; text-align:center; font-size:11.5px; min-height:38px; display:flex; align-items:center; justify-content:center; border:1px dashed var(--line); color:var(--ink-faint);}
+  .tracker-cell.current{outline:2px solid var(--ink); outline-offset:-1px;}
+
+  /* Weekly Plan */
+  .wp-header{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:12px;}
+  .wp-header h3{font-family:'Fraunces',serif; font-size:16px; font-weight:600;}
+  .wp-header .wp-sub{font-size:12px; color:var(--ink-dim);}
+  .pill{font-size:11px; padding:3px 10px; border-radius:20px; font-weight:500;}
+  .pill.gold{background:var(--gold-soft); color:var(--gold);}
+  .pill.sage{background:var(--sage-soft); color:var(--sage);}
+  .wp-row{padding:9px 0; border-bottom:1px solid var(--line);}
+  .wp-row:last-of-type{border-bottom:none;}
+  .wp-row .wp-date{font-family:'Fraunces',serif; font-weight:500; font-size:13px; margin-bottom:2px;}
+  .wp-row .wp-text{font-size:12.5px; color:var(--ink-dim); line-height:1.5;}
+  .wl-more{text-align:center; font-size:12.5px; color:var(--ink-dim); padding-top:14px; margin-top:12px; border-top:1px solid var(--line); cursor:pointer;}
+  .wl-more:hover{color:var(--ink);}
+
+  /* Sweeps — Level 1 playbooks */
+  .universal-row{border:1.5px solid var(--gold); border-radius:10px; padding:14px; background:var(--gold-soft);}
+  .cos-title{font-family:'Fraunces',serif; font-size:15px; font-weight:600;}
+  .cos-sub{font-size:11.5px; color:var(--ink-dim); margin-bottom:12px;}
+  .chip-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;}
+  .chip-group-label{font-family:'Fraunces',serif; font-size:9.5px; letter-spacing:.04em; text-transform:uppercase; color:var(--gold); margin-bottom:6px;}
+  .chip{background:var(--card); border:1px solid var(--line); border-radius:8px; padding:9px 10px; margin-bottom:8px;}
+  .chip-box{font-size:9.5px; color:var(--ink-faint); margin-bottom:2px;}
+  .chip-name{font-size:12px; font-weight:600; margin-bottom:6px;}
+  .chip-copy{font-size:11px; color:var(--ink-dim); border:1px solid var(--line); border-radius:6px; padding:4px 9px; cursor:pointer; display:inline-block;}
+  .chip-copy:hover{border-color:var(--gold); color:var(--ink);}
+  .cos-not-shown{margin-top:12px; padding-top:10px; border-top:1px dashed var(--line); font-size:11px; color:var(--ink-faint); font-style:italic;}
+
+  /* Decision Log */
+  .dl-header{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:12px;}
+  .dl-header h3{font-family:'Fraunces',serif; font-size:16px; font-weight:600;}
+  .dl-row{display:flex; gap:14px; padding:10px 0; border-bottom:1px solid var(--line); align-items:flex-start;}
+  .dl-row:last-of-type{border-bottom:none;}
+  .dl-date{flex:0 0 56px; font-family:'Fraunces',serif; font-weight:500; font-size:13px;}
+  .dl-text{flex:1; font-size:12.5px; color:var(--ink-dim);}
+  .dl-tag{flex-shrink:0; font-size:9.5px; font-weight:600; color:var(--ink-dim); background:var(--line); padding:3px 9px; border-radius:20px; text-transform:uppercase; letter-spacing:.03em;}
+
+  /* Full-page views: Decision Log detail, Weekly Plan standing */
+  .back-link{font-size:13px; color:var(--ink-dim); margin-bottom:16px; display:inline-block; cursor:pointer;}
+  .back-link:hover{color:var(--ink);}
+  .full-h1{font-family:'Fraunces',serif; font-weight:600; font-size:22px; margin-bottom:4px;}
+  .full-sub{font-size:13px; color:var(--ink-dim); margin-bottom:20px;}
+
+  .sort-row{display:flex; align-items:center; gap:10px; margin-bottom:18px; flex-wrap:wrap;}
+  .sort-label{font-size:12px; color:var(--ink-faint);}
+  .sort-btn{font-size:12px; padding:6px 13px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink-dim); cursor:pointer;}
+  .sort-btn.active{background:var(--ink); color:var(--bg); border-color:var(--ink);}
+  .legend{display:flex; gap:16px; flex-wrap:wrap; padding:12px 16px; background:var(--card); border:1px solid var(--line); border-radius:12px; margin-bottom:22px;}
+  .legend-item{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-dim);}
+  .legend-dot{width:8px; height:8px; border-radius:3px;}
+
+  .full-row{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:15px 18px; margin-bottom:9px;}
+  .full-row-top{display:flex; align-items:flex-start; gap:12px; justify-content:space-between; flex-wrap:wrap;}
+  .full-row-date{font-family:'Fraunces',serif; font-weight:500; font-size:13px; flex-shrink:0; min-width:52px;}
+  .full-row-main{flex:1; min-width:200px;}
+  .full-row-text{font-size:12.5px; color:var(--ink-dim); line-height:1.5;}
+  .full-row-text b{color:var(--ink); font-weight:500;}
+  .full-row-box{font-size:10.5px; color:var(--ink-faint); margin-top:3px;}
+  .full-row-tag{flex-shrink:0; font-size:9px; font-weight:600; padding:3px 8px; border-radius:20px; text-transform:uppercase; letter-spacing:.03em; white-space:nowrap;}
+  .full-row-tag.group{background:var(--line); color:var(--ink-dim);}
+  .stage-pill{flex-shrink:0; font-size:9px; font-weight:600; padding:3px 8px; border-radius:20px; white-space:nowrap;}
+  .stage-pill.discussed{background:var(--line); color:var(--ink-dim);}
+  .stage-pill.scoped{background:var(--gold-soft); color:var(--gold);}
+  .stage-pill.built{background:var(--sage-soft); color:var(--sage);}
+  .stage-pill.confirmed{background:var(--clay-soft); color:var(--clay);}
+  .cat-heading{font-family:'Fraunces',serif; font-weight:500; font-size:14px; color:var(--ink-dim); margin:22px 0 10px;}
+  .cat-heading:first-of-type{margin-top:0;}
+
+  .att-row{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:4px;}
+  .att-col{display:flex; flex-direction:column; align-items:center; flex-shrink:0;}
+  .att-dot{width:16px; height:16px; border-radius:50%; border:1.5px solid var(--line); background:transparent;}
+  .att-dot.on{background:var(--sage); border-color:var(--sage);}
+  .att-label{font-size:9.5px; color:var(--ink-faint); margin-top:4px;}
+  .rhythm-caption{font-size:12px; color:var(--ink-dim); margin-top:10px; line-height:1.5;}
+  .rhythm-caption b{color:var(--ink); font-weight:500;}
+  .plain-sentence{font-size:13.5px; line-height:1.6;}
+  .cta-box{text-align:center; font-size:12.5px; color:var(--ink-dim); padding:14px; border:1px solid var(--line); border-radius:10px; cursor:pointer; margin-top:4px;}
+  .parked-note{font-size:11.5px; color:var(--ink-faint); text-align:center; margin-top:22px; line-height:1.6; border-top:1px dashed var(--line); padding-top:16px;}
+
+  @media (max-width:640px){ .chip-grid{grid-template-columns:1fr;} .tracker-wrap{flex-direction:column;} }
+</style>
+</head>
+<body>
+
+<div class="nav-strip">
+  <span class="nav-label">Command Center — Diana Reyes</span>
+  <button class="active" id="nav-main" onclick="showView('main')">Command Center</button>
+  <button id="nav-decision" onclick="showView('decision')">Decision Log</button>
+  <button id="nav-weekly" onclick="showView('weekly')">Weekly Plan</button>
+</div>
+
+<!-- ============ VIEW 1: MAIN COMMAND CENTER ============ -->
+<div class="view active page" id="view-main">
+
+  <div class="banner">TEMPLATE — {{PLACEHOLDER}} tokens throughout are filled by the server at request time. Not a finished page.</div>
+
+  <!-- Panel A: greeting — always visible -->
+  <div class="card">
+    <div class="ns-header">
+      <div class="ns-greeting">
+        <!-- SERVER-FILL: clients.name -->
+        <h1>Good morning, {{CLIENT_FIRST_NAME}}.</h1>
+        <!-- SERVER-FILL: current date, computed at request time -->
+        <div class="ns-date">{{TODAY_DATE_LONG}}</div>
+      </div>
+      <div class="ns-countdown">
+        <!-- SERVER-FILL: review_schedule.day_1_date minus today, computed at request time -->
+        <div class="days tabular">{{DAYS_TO_REVIEW}}</div>
+        <div class="days-label">days to quarterly review</div>
+        <!-- SERVER-FILL: review_schedule.quarter + review_schedule.day_1_date -->
+        <div class="review-date">{{QUARTER_LABEL}} review · {{REVIEW_DATE_SHORT}}</div>
+      </div>
+    </div>
+    <!-- SERVER-FILL: clients.mission_line -->
+    <p class="ns-mission">{{MISSION_LINE}}</p>
+  </div>
+
+  <!-- SERVER-FILL / EXISTENCE GATE: this entire <div class="card"> block is
+       included in the server's response ONLY IF (review_schedule.day_1_date
+       minus today) <= 14. Otherwise the server omits this block entirely --
+       not hidden via CSS, not rendered empty, genuinely absent from the
+       page's HTML, per dashboard-10's confirmed panel-existence rule.
+       The mockup-flag banner below is a build-time aid only and must be
+       removed once this gating is server-implemented -- it should never
+       appear in what a real client sees. -->
+  <div class="card" style="border-color:var(--clay);">
+    <div class="mockup-flag">Reference only — this panel appears starting Aug 26 (14 days out); absent before then</div>
+    <div class="section-label" style="margin-top:0;">North Star Documents</div>
+    <div class="tracker-wrap">
+      <!-- SERVER-FILL: sourced from GET /command-center/north-star-documents
+           (already deployed, netlify/functions/north-star-documents.js).
+           annual_plan_exists -> filled/empty state below; annual_plan_filename
+           -> the "not yet created" link is only shown when false. -->
+      <div class="tracker-rail">
+        <div class="title">Annual Plan</div>
+        <a class="link" style="font-size:11.5px;" onclick="return false;">{{ANNUAL_PLAN_CELL_TEXT}}</a>
+      </div>
+      <div class="tracker-table">
+        <div class="tracker-headers">
+          <div></div><div class="q-head">Q1</div><div class="q-head">Q2</div><div class="q-head">Q3 · now</div><div class="q-head">Q4</div>
+        </div>
+        <!-- SERVER-FILL: each cell's text/link driven by the matching
+             entry in the function's `quarters` array (look_back_exists /
+             look_forward_exists), plus which quarter is "current" per
+             review_schedule -->
+        <div class="tracker-row">
+          <div class="tracker-row-label">Look Back</div>
+          <div class="tracker-cell">{{Q1_LOOK_BACK_CELL}}</div>
+          <div class="tracker-cell">{{Q2_LOOK_BACK_CELL}}</div>
+          <div class="tracker-cell current">{{Q3_LOOK_BACK_CELL}}</div>
+          <div class="tracker-cell">{{Q4_LOOK_BACK_CELL}}</div>
+        </div>
+        <div class="tracker-row">
+          <div class="tracker-row-label">Look Forward</div>
+          <div class="tracker-cell">{{Q1_LOOK_FORWARD_CELL}}</div>
+          <div class="tracker-cell">{{Q2_LOOK_FORWARD_CELL}}</div>
+          <div class="tracker-cell">{{Q3_LOOK_FORWARD_CELL}}</div>
+          <div class="tracker-cell">{{Q4_LOOK_FORWARD_CELL}}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Weekly Plan summary — links forward to full page -->
+  <div class="card">
+    <div class="wp-header">
+      <div><h3>Weekly Plan</h3><div class="wp-sub">Yours — due Thursday</div></div>
+      <span class="pill gold">Due Thu</span>
+    </div>
+    <!-- SERVER-FILL: latest 1-2 rows from weekly_reports (WHERE client_id = this client),
+         most recent first. Placeholder rows below are illustrative shape only. -->
+    <div class="wp-row">
+      <div class="wp-date">{{WEEKLY_ROW_1_DATE}}</div>
+      <div class="wp-text">{{WEEKLY_ROW_1_TEXT}}</div>
+    </div>
+    <div class="wp-row">
+      <div class="wp-date">{{WEEKLY_ROW_2_DATE}}</div>
+      <div class="wp-text">{{WEEKLY_ROW_2_TEXT}}</div>
+    </div>
+    <div class="wl-more" onclick="showView('weekly')">Open weekly plan ›</div>
+  </div>
+
+  <!-- Chief of Staff Sweeps — Level 1: playbooks only -->
+  <div class="section-label">Chief of Staff Sweeps</div>
+  <div class="card">
+    <div class="universal-row">
+      <div class="cos-title">Virtual team playbooks</div>
+      <div class="cos-sub">Any box, on demand — everyone gets this</div>
+      <div class="chip-grid">
+        <div>
+          <div class="chip-group-label">Boxes 2–4</div>
+          <div class="chip"><div class="chip-box">Box 2</div><div class="chip-name">Client avatar</div><span class="chip-copy">Copy prompt</span></div>
+          <div class="chip"><div class="chip-box">Box 3</div><div class="chip-name">Lead gen conversation starter</div><span class="chip-copy">Copy prompt</span></div>
+          <div class="chip" style="margin-bottom:0;"><div class="chip-box">Box 4</div><div class="chip-name">Problem call</div><span class="chip-copy">Copy prompt</span></div>
+        </div>
+        <div>
+          <div class="chip-group-label">Boxes 5–7</div>
+          <div class="chip"><div class="chip-box">Box 5</div><div class="chip-name">Onboarding</div><span class="chip-copy">Copy prompt</span></div>
+          <div class="chip"><div class="chip-box">Box 6</div><div class="chip-name">Service delivery</div><span class="chip-copy">Copy prompt</span></div>
+          <div class="chip" style="margin-bottom:0;"><div class="chip-box">Box 7</div><div class="chip-name">Success documentation</div><span class="chip-copy">Copy prompt</span></div>
+        </div>
+        <div>
+          <div class="chip-group-label">Boxes 8–10</div>
+          <div class="chip"><div class="chip-box">Box 8</div><div class="chip-name">Consult</div><span class="chip-copy">Copy prompt</span></div>
+          <div class="chip"><div class="chip-box">Box 9</div><div class="chip-name">Repeat</div><span class="chip-copy">Copy prompt</span></div>
+          <div class="chip" style="margin-bottom:0;"><div class="chip-box">Box 10</div><div class="chip-name">Delight</div><span class="chip-copy">Copy prompt</span></div>
+        </div>
+      </div>
+      <div class="cos-not-shown">Meeting, Weekly, and Moment sweep rows are a 1:1-tier feature and do not appear for group coaching clients — not hidden, simply not part of this tier's content yet.</div>
+    </div>
+  </div>
+
+  <!-- Decision Log summary — links forward to full page -->
+  <div class="section-label">Decision Log</div>
+  <div class="card">
+    <div class="dl-header">
+      <h3>Decision Log</h3>
+      <!-- SERVER-FILL: COUNT(*) FROM decisions WHERE client_id = this client -->
+      <span class="pill sage tabular">{{DECISION_COUNT}} live</span>
+    </div>
+    <!-- SERVER-FILL: most recent row from `decisions` (same table the full
+         Decision Log page reads via {{DECISION_LOG_ROWS_JSON}} above) -->
+    <div class="dl-row">
+      <div class="dl-date">{{LATEST_DECISION_DATE}}</div>
+      <div class="dl-text">{{LATEST_DECISION_TEXT}}</div>
+      <span class="dl-tag">{{LATEST_DECISION_TAG}}</span>
+    </div>
+    <div class="wl-more" onclick="showView('decision')">Open decision log ›</div>
+  </div>
+
+</div>
+
+<!-- ============ VIEW 2: DECISION LOG FULL PAGE ============ -->
+<div class="view page page-narrow" id="view-decision">
+  <span class="back-link" onclick="showView('main')">&larr; Command center</span>
+  <h1 class="full-h1">Decision log</h1>
+  <div class="full-sub">Every decision made with Alzay — on a group call or in a 1:1 session — recorded in one continuous table.</div>
+
+  <div class="sort-row">
+    <span class="sort-label">Sort by</span>
+    <button class="sort-btn active" id="btn-date" onclick="setSort('date')">Date</button>
+    <button class="sort-btn" id="btn-stage" onclick="setSort('stage')">Stage</button>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><span class="legend-dot" style="background:var(--ink-faint);"></span> Group — stops at Discussed</div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--gold);"></span> Scoped</div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--sage);"></span> Built / Confirmed</div>
+  </div>
+
+  <div id="row-list"></div>
+</div>
+
+<!-- ============ VIEW 3: WEEKLY PLAN STANDING PAGE ============ -->
+<div class="view page page-narrow" id="view-weekly">
+  <span class="back-link" onclick="showView('main')">&larr; Command center</span>
+  <h1 class="full-h1">Weekly plan</h1>
+  <div class="full-sub">Diana's standing this quarter</div>
+
+  <div class="card">
+    <div class="section-label" style="margin-top:0;">This week</div>
+    <div class="plain-sentence">Focus was following up on the two referrals from last month's group call.</div>
+  </div>
+
+  <div class="card">
+    <div class="section-label" style="margin-top:0;">Your rhythm</div>
+    <div class="plain-sentence" style="margin-bottom:14px;">Group call attendance — twice a month, in place of a weekly rhythm.</div>
+    <div class="att-row">
+      <div class="att-col"><div class="att-dot on"></div><div class="att-label">Jun 10</div></div>
+      <div class="att-col"><div class="att-dot on"></div><div class="att-label">Jun 24</div></div>
+      <div class="att-col"><div class="att-dot"></div><div class="att-label">Jul 8</div></div>
+      <div class="att-col"><div class="att-dot on"></div><div class="att-label">Jul 22</div></div>
+      <div class="att-col"><div class="att-dot on"></div><div class="att-label">Aug 11</div></div>
+    </div>
+    <div class="rhythm-caption"><b>4 of 5 calls</b> attended since joining. One box or celebration shared each time you show up.</div>
+  </div>
+
+  <div class="card">
+    <div class="section-label" style="margin-top:0;">Something you keep coming back to</div>
+    <div class="plain-sentence" style="color:var(--ink-faint); font-style:italic;">This card tracks a pattern across consecutive weeks — a mechanism that doesn't have a defined group-tier equivalent yet, since group runs on calls, not weeks. Genuinely open, not yet decided.</div>
+  </div>
+
+  <div class="cta-box">Start this week's plan &rsaquo;</div>
+
+  <div class="parked-note">A full weekly rhythm stack (Plan/Focus/Call) is a 1:1-tier feature — it isn't hidden here, it simply doesn't apply at the group tier yet.</div>
+</div>
+
+<script>
+function showView(name){
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  document.querySelectorAll('.nav-strip button').forEach(b => b.classList.remove('active'));
+  document.getElementById('nav-' + name).classList.add('active');
+  window.scrollTo(0,0);
+}
+
+/* SERVER-FILL: this entire array is injected by the server at request
+   time, sourced from the `decisions` table (WHERE client_id = this
+   client's clients.id), ordered however the server chooses -- the
+   client-side render() function below still handles date/stage sorting
+   itself, so the server does not need to pre-sort.
+
+   Expected row shape per record, matching the decisions table columns
+   exactly: { date, dateLabel, source ('group'|'1:1'), stage
+   ('discussed'|'scoped'|'built'|'confirmed'), text, box }.
+
+   The value below is a placeholder token, not real content -- it exists
+   so this file is never mistaken for something that already reads live
+   data, the same discipline used for every other empty-state in this
+   system. */
+const rows = {{DECISION_LOG_ROWS_JSON}};
+
+const stageOrder = ["discussed","scoped","built","confirmed"];
+const stageLabel = {discussed:"Discussed", scoped:"Scoped", built:"Built", confirmed:"Confirmed working"};
+
+function renderRow(r){
+  const tagHtml = r.source === 'group' ? `<span class="full-row-tag group">Group</span>` : `<span class="full-row-tag" style="background:var(--gold-soft);color:var(--gold);">1:1</span>`;
+  const stageClass = r.source === 'group' ? 'discussed' : r.stage;
+  const stageText = r.source === 'group' ? 'Discussed' : stageLabel[r.stage];
+  return `
+    <div class="full-row">
+      <div class="full-row-top">
+        <div class="full-row-date">${r.dateLabel}</div>
+        <div class="full-row-main">
+          <div class="full-row-text">${r.text}</div>
+          <div class="full-row-box">${r.box}</div>
+        </div>
+        ${tagHtml}
+        <span class="stage-pill ${stageClass}">${stageText}</span>
+      </div>
+    </div>`;
+}
+
+function renderDecisionLog(mode){
+  const list = document.getElementById('row-list');
+  if(mode === 'date'){
+    const sorted = [...rows].sort((a,b)=> new Date(b.date) - new Date(a.date));
+    list.innerHTML = sorted.map(renderRow).join('');
+  } else {
+    let html = '';
+    stageOrder.forEach(stage => {
+      const group = rows.filter(r => (r.source === 'group' ? 'discussed' : r.stage) === stage);
+      if(group.length === 0) return;
+      html += `<div class="cat-heading">${stageLabel[stage]}</div>`;
+      html += group.map(renderRow).join('');
+    });
+    list.innerHTML = html;
+  }
+}
+
+function setSort(mode){
+  document.getElementById('btn-date').classList.toggle('active', mode==='date');
+  document.getElementById('btn-stage').classList.toggle('active', mode==='stage');
+  renderDecisionLog(mode);
+}
+
+renderDecisionLog('date');
+</script>
+</body>
+</html>
