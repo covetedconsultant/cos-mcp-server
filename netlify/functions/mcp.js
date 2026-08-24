@@ -121,6 +121,7 @@ const TOOLS = [
   { name: "get_my_workflows", description: "Returns the protocols/workflows pushed to the caller (from action_registry).", inputSchema: { type: "object", properties: {} } },
   { name: "get_my_decisions", description: "Returns the caller's own decision log rows (decisions table), most recent first.", inputSchema: { type: "object", properties: { limit: { type: "number", description: "optional, defaults to all" } } } },
   { name: "get_my_weekly_plan", description: "Returns the caller's most recent weekly planning report (weekly_planning_reports table).", inputSchema: { type: "object", properties: {} } },
+  { name: "get_reference_document", description: "Fetches one reference document (template, module spec, question order, etc.) by its exact instruction_id, for a protocol to build from. Only returns documents explicitly marked client-readable — an internal/admin document (e.g. server architecture, protocol logs) returns not found, same as a name that doesn't exist.", inputSchema: { type: "object", properties: { instruction_id: { type: "string", description: "exact id, e.g. REF-command-center-html-template-v2-20260824" } }, required: ["instruction_id"] } },
   { name: "capture_note", description: "Write tool. Captures a decision, follow-up, or contact-update note, scoped to the caller's own client_id.", inputSchema: { type: "object", properties: { note_content: { type: "string" }, tags: { type: "string" } }, required: ["note_content"] } },
   { name: "set_my_sweep_time", description: "Write tool. Sets the scheduled day/time for one of the caller's own sweeps in sweep_schedules, scoped to the caller's own client_id. Upserts by (client_id, sweep_name).", inputSchema: { type: "object", properties: { sweep_name: { type: "string", description: "e.g. Content Sweep" }, scheduled_time: { type: "string", description: "HH:MM:SS, 24-hour" }, scheduled_days: { type: "array", items: { type: "string" }, description: "e.g. [\"Monday\"]" }, timezone: { type: "string", description: "e.g. America/New_York, optional, defaults to caller's existing timezone" } }, required: ["sweep_name", "scheduled_time", "scheduled_days"] } },
   { name: "set_my_quarter", description: "Write tool. Copies a quarter's dates onto the caller's own review_schedule row. Upserts by (client_id, quarter, year).", inputSchema: { type: "object", properties: { quarter: { type: "string" }, year: { type: "number" }, starts_on: { type: "string" }, ends_on: { type: "string" }, day_1_date: { type: "string" }, day_2_date: { type: "string" }, day_3_date: { type: "string" }, day_4_date: { type: "string" } }, required: ["quarter", "year", "starts_on", "ends_on", "day_1_date", "day_2_date"] } },
@@ -276,6 +277,28 @@ async function callTool(name, args, client, supabase) {
       const { data, error } = await query;
       if (error) throw new Error(error.message);
       return data || [];
+    }
+
+    case "get_reference_document": {
+      // NEW 2026-08-24 — general-purpose reference-document reader.
+      // Gated on client_readable (migration add_client_readable_to_
+      // instructions): a real but restricted document (e.g.
+      // REF-cos-mcp-server-architecture) returns the same {found:false}
+      // as a name that doesn't exist at all — never reveals that a
+      // restricted document exists.
+      const { instruction_id } = args;
+      if (!instruction_id) throw new Error("instruction_id is required");
+      const { data, error } = await supabase
+        .from("instructions")
+        .select("instruction_id, version, body")
+        .eq("instruction_id", instruction_id)
+        .eq("kind", "reference")
+        .eq("client_readable", true)
+        .eq("active", true)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!data) return { found: false };
+      return { found: true, ...data };
     }
 
     case "get_my_weekly_plan": {
