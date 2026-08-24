@@ -5,3 +5,6 @@
   node_bundler = "esbuild"
 
   [functions."*"]
+
+  [functions.command-center]
+    included_files = ["command-center/templates/**"]
