@@ -141,6 +141,20 @@ e.g. `"Run " + sweep_name + " now."`), not a column to maintain.
   Claude and acting on a client's outside tool) is a real placeholder, not
   a finished sweep — see "still open" below.
 
+**End-to-end verified 2026-08-25:** manually triggered `run-sweep.yml` on
+`main` with a fake `TEST-000` folder. Confirmed the full chain actually
+works — GitHub Action → `report-sweep-run` → a real row landing in
+`protocol_runs` — before deleting the test row. Two real bugs were caught
+and fixed in `report-sweep-run` along the way, both now live: it wasn't
+checking for database errors at all (so a failed write looked identical to
+a success), and it tried to write directly to `all_found`, which is a
+generated/computed column Postgres won't accept a direct value for. Note:
+`all_found` came back `true` even on a deliberately failed test run — it's
+computed by the database itself from something unrelated to what this
+function writes, so `ingredients_found.dispatch_status` is the real signal
+to read, not `all_found`, until that column's own logic is looked at
+separately.
+
 ## Not yet done — still open
 
 - **Whose Anthropic key does `run-sweep.yml` use?** Marked as an explicit
