@@ -120,6 +120,9 @@ const TOOLS = [
   { name: "get_onboarding_status", description: "Reports whether the caller has a clients row, whether they're onboarded, and which onboarding step to resume from.", inputSchema: { type: "object", properties: {} } },
   { name: "get_my_workflows", description: "Returns the protocols/workflows pushed to the caller (from action_registry).", inputSchema: { type: "object", properties: {} } },
   { name: "get_my_decisions", description: "Returns the caller's own decision log rows (decisions table), most recent first.", inputSchema: { type: "object", properties: { limit: { type: "number", description: "optional, defaults to all" } } } },
+  { name: "get_my_weekly_plan", description: "Returns the caller's most recent weekly planning report (weekly_planning_reports table).", inputSchema: { type: "object", properties: {} } },
+  { name: "get_reference_document", description: "Fetches one reference document (template, module spec, question order, etc.) by its exact instruction_id, for a protocol to build from. Only returns documents explicitly marked client-readable — an internal/admin document (e.g. server architecture, protocol logs) returns not found, same as a name that doesn't exist.", inputSchema: { type: "object", properties: { instruction_id: { type: "string", description: "exact id, e.g. REF-command-center-html-template-v2-20260824" } }, required: ["instruction_id"] } },
+  { name: "get_my_sweeps", description: "Returns the caller's own custom scheduled sweeps (sweep_schedules, active rows only), each joined to its most recent actual run (protocol_runs) so the caller can tell what SHOULD happen from what ACTUALLY happened. Does not include the universal Virtual Team Playbooks row, which is static and not scheduled.", inputSchema: { type: "object", properties: {} } },
   { name: "capture_note", description: "Write tool. Captures a decision, follow-up, or contact-update note, scoped to the caller's own client_id.", inputSchema: { type: "object", properties: { note_content: { type: "string" }, tags: { type: "string" } }, required: ["note_content"] } },
   { name: "set_my_sweep_time", description: "Write tool. Sets the scheduled day/time for one of the caller's own sweeps in sweep_schedules, scoped to the caller's own client_id. Upserts by (client_id, sweep_name).", inputSchema: { type: "object", properties: { sweep_name: { type: "string", description: "e.g. Content Sweep" }, scheduled_time: { type: "string", description: "HH:MM:SS, 24-hour" }, scheduled_days: { type: "array", items: { type: "string" }, description: "e.g. [\"Monday\"]" }, timezone: { type: "string", description: "e.g. America/New_York, optional, defaults to caller's existing timezone" } }, required: ["sweep_name", "scheduled_time", "scheduled_days"] } },
   { name: "set_my_quarter", description: "Write tool. Copies a quarter's dates onto the caller's own review_schedule row. Upserts by (client_id, quarter, year).", inputSchema: { type: "object", properties: { quarter: { type: "string" }, year: { type: "number" }, starts_on: { type: "string" }, ends_on: { type: "string" }, day_1_date: { type: "string" }, day_2_date: { type: "string" }, day_3_date: { type: "string" }, day_4_date: { type: "string" } }, required: ["quarter", "year", "starts_on", "ends_on", "day_1_date", "day_2_date"] } },
@@ -275,6 +278,84 @@ async function callTool(name, args, client, supabase) {
       const { data, error } = await query;
       if (error) throw new Error(error.message);
       return data || [];
+    }
+
+    case "get_reference_document": {
+      // NEW 2026-08-24 — general-purpose reference-document reader.
+      // Gated on client_readable (migration add_client_readable_to_
+      // instructions): a real but restricted document (e.g.
+      // REF-cos-mcp-server-architecture) returns the same {found:false}
+      // as a name that doesn't exist at all — never reveals that a
+      // restricted document exists.
+      const { instruction_id } = args;
+      if (!instruction_id) throw new Error("instruction_id is required");
+      const { data, error } = await supabase
+        .from("instructions")
+        .select("instruction_id, version, body")
+        .eq("instruction_id", instruction_id)
+        .eq("kind", "reference")
+        .eq("client_readable", true)
+        .eq("active", true)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!data) return { found: false };
+      return { found: true, ...data };
+    }
+
+    case "get_my_sweeps": {
+      // NEW 2026-08-24 — closes the read-side gap co-1's own Zone 4 spec
+      // already described: sweep_schedules says what SHOULD happen,
+      // protocol_runs says what ACTUALLY happened. Two tables, one
+      // question, per that spec. category/sweep_type added same session
+      // (migration add_category_and_sweep_type_to_sweep_schedules).
+      const { data: sweeps, error: sErr } = await supabase
+        .from("sweep_schedules")
+        .select("sweep_name, protocol_id, category, sweep_type, scheduled_time, scheduled_days, timezone")
+        .eq("client_id", client.id)
+        .eq("is_active", true);
+      if (sErr) throw new Error(sErr.message);
+      if (!sweeps || sweeps.length === 0) return [];
+
+      const protocolIds = [...new Set(sweeps.map((s) => s.protocol_id))];
+      const { data: runs, error: rErr } = await supabase
+        .from("protocol_runs")
+        .select("for_protocol, requested_at")
+        .eq("client_id", client.id)
+        .in("for_protocol", protocolIds)
+        .order("requested_at", { ascending: false });
+      if (rErr) throw new Error(rErr.message);
+
+      const lastRunByProtocol = {};
+      for (const r of runs || []) {
+        if (!lastRunByProtocol[r.for_protocol]) lastRunByProtocol[r.for_protocol] = r.requested_at;
+      }
+
+      return sweeps.map((s) => ({
+        sweep_name: s.sweep_name,
+        category: s.category,
+        sweep_type: s.sweep_type,
+        scheduled_time: s.scheduled_time,
+        scheduled_days: s.scheduled_days,
+        timezone: s.timezone,
+        last_ran: lastRunByProtocol[s.protocol_id] || null,
+      }));
+    }
+
+    case "get_my_weekly_plan": {
+      // NEW 2026-08-24 — built for co-29 (Command Center Weekly Plan
+      // section). weekly_planning_reports just got a real client_id
+      // column (migration add_client_id_to_weekly_planning_reports);
+      // the prior free-text user_name match is no longer used here.
+      const { data, error } = await supabase
+        .from("weekly_planning_reports")
+        .select("session_date, quarter, week_number, quarterly_focus_professional, quarterly_focus_personal, this_week_bronze, this_week_silver, this_week_gold, whats_true, carried_forward")
+        .eq("client_id", client.id)
+        .order("session_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!data) return { found: false };
+      return { found: true, ...data };
     }
 
     case "get_my_daily_brief": {

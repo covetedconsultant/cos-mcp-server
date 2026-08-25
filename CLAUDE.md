@@ -25,13 +25,15 @@ what Baron actually *does* with these tools lives in Supabase, not here
   client chat (no filesystem/HTTP access from there) — kept for
   reference/manual use only, not part of the live Command Center path.
 - `command-center/templates/diana-reyes-command-center-template.html`
-  — the canonical Command Center HTML. This file is the source of
-  truth; its content is also copied verbatim into a Supabase reference
-  document (`REF-command-center-html-template-v2-20260824`,
-  `instructions` table) so Baron can read it at runtime — Baron has no
-  access to this repo directly. If this file changes, the Supabase copy
-  needs a matching update; they are not wired to stay in sync
-  automatically.
+  — a build-time snapshot only, **not** the live source (see the
+  comment at the top of the file). The real, authoritative copy is the
+  Supabase row `REF-command-center-html-template-v2-20260824`
+  (`instructions` table), fetched at runtime via the `get_reference_document`
+  tool — deliberately, not by giving a client session direct read
+  access to this repo, since that would also expose everything else in
+  it (including this server's own architecture notes). If the Supabase
+  row changes, update this file to match by hand — the two are not
+  wired to stay in sync automatically.
 
 ## Auth pattern (every tool must follow this)
 
@@ -76,14 +78,11 @@ Confirm via a real behavioral probe (a live tool call, not just a
 "ready" state) — see `LOG-DEPLOY-ERRORS` and the `go-build-it` skill for
 the full discipline and known failure modes before pushing.
 
-## A known, currently open gap
+## Resolved gaps, kept here as history
 
-As of 2026-08-24: there is no MCP tool that lets Baron read Supabase
-`instructions` rows (REF documents) at runtime. The Command Center
-artifact's template and design-system content is meant to come from
-`REF-command-center-html-template-v2-20260824` and
-`REF-command-center-design-system-v2-20260824`, but no live tool
-currently exposes that table to a client session. Building it (or
-deciding on a different mechanism) is required before `co-29` — the
-protocol that assembles the Command Center — can actually run as
-written.
+As of 2026-08-24, both closed: `get_reference_document(instruction_id)`
+lets a client session fetch an approved REF document by name, gated on
+a `client_readable` column (default false — nothing is exposed until
+explicitly reviewed and marked true). `get_my_sweeps` closes the
+matching read-side gap for `sweep_schedules`/`protocol_runs`. `co-29`
+now runs as written.
