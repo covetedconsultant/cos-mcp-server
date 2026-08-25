@@ -119,13 +119,43 @@ e.g. `"Run " + sweep_name + " now."`), not a column to maintain.
 - "Send feedback" under a Family 2 sweep writes into that sweep's own
   `-log.md`, not a separate inbox.
 
+## Built this session (2026-08-25)
+
+- **`dispatch-client-sweeps`** (Supabase edge function, live) — wakes every
+  5 minutes via pg_cron, checks every active `client_repo` sweep against
+  its own `scheduled_days` / `scheduled_time` / `timezone`, and dispatches
+  the client repo's `run-sweep.yml` workflow when due. Dedupes against
+  `protocol_runs` so a sweep fires once per its own local day. Uses the
+  `sweep-dispatch-runner-github` secret (confirmed present by name in
+  Supabase → Edge Functions → Secrets).
+- **`report-sweep-run`** (Supabase edge function, live) — the completion
+  side. A client repo's `run-sweep.yml` calls this when it finishes,
+  guarded by a shared secret (`SWEEP_REPORT_SHARED_SECRET`) rather than a
+  Supabase JWT, since a GitHub Action has no Supabase session. Updates or
+  inserts the matching `protocol_runs` row.
+- **pg_cron job** `dispatch-client-sweeps-every-5-min` — the clock itself,
+  calling the dispatcher via `pg_net.http_post` every 5 minutes.
+- **`diana-reyes-outputs/.github/workflows/run-sweep.yml`** — the shared,
+  generic runner template. Reads whichever `DR-XXX` folder it's told to,
+  reports back regardless of outcome. The middle step (actually calling
+  Claude and acting on a client's outside tool) is a real placeholder, not
+  a finished sweep — see "still open" below.
+
 ## Not yet done — still open
 
-- The edge function and the shared GitHub Action workflow described above
-  are designed, not built.
-- The GitHub credential the edge function needs is assumed to already
-  exist as a Supabase secret — not yet confirmed by name or scope; needs
-  verifying before the edge function is written.
-- Diana's own real Family 2 sweeps aren't designed yet — this session
-  worked out the *mechanism*, using Cameron's real sweeps as the worked
-  example, not Diana's actual content.
+- **Whose Anthropic key does `run-sweep.yml` use?** Marked as an explicit
+  TODO in the workflow file. The company's own key, stored in every client
+  repo it dispatches into, is the working assumption but was never decided
+  outright — worth a real answer before any client repo goes live, since
+  it means the company's key sits in repos it doesn't control.
+- **`SWEEP_REPORT_SHARED_SECRET` still needs to be set**, in both Supabase
+  (Edge Functions → Secrets) and in `diana-reyes-outputs`'s own repo
+  secrets, with the same value in both places — same manual, non-readable
+  step as the GitHub dispatch token.
+- **No real Family 2 sweep is designed for Diana yet.** The middle step of
+  `run-sweep.yml` is a placeholder that reports success without doing
+  anything — this session built the *mechanism*, using Cameron's real
+  sweeps as the worked example, not Diana's actual content.
+- The workflow currently assumes the client repo's default branch is
+  always `main` (hardcoded in the dispatcher's GitHub API call) — fine for
+  now, worth revisiting if that's ever not true.
