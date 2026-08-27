@@ -359,14 +359,14 @@ async function callTool(name, args, client, supabase) {
     }
 
     case "get_my_daily_brief": {
-      // UNVERIFIED — could not safely live-test (writes nothing, but no
-      // confirmed daily_briefs row exists for Alzay's account to check
-      // shape against). Best-effort against the daily_briefs table.
+      // FIXED 2026-08-26 — daily_briefs has no client_id column; the real
+      // column is user_id. Confirmed live against information_schema.columns
+      // (id, user_id, brief_date, brief_content, created_at) before this fix.
       const date = args.date || new Date().toISOString().slice(0, 10);
       const { data, error } = await supabase
         .from("daily_briefs")
         .select("*")
-        .eq("client_id", client.id)
+        .eq("user_id", client.id)
         .eq("brief_date", date)
         .maybeSingle();
       if (error) throw new Error(error.message);
