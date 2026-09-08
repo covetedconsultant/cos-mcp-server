@@ -36,6 +36,16 @@
 // { user_email, rich_text_body }). This tool follows that exact proven
 // pattern rather than the public docs, which is what should have been
 // checked first.
+//
+// 2026-09-08, later still — added save_my_sweep_output (writes
+// sweep_outputs). Closes the write-side gap for the client-runs-their-own-
+// schedule model: a client's Cowork scheduled task executes a sweep
+// protocol inside the CLIENT's own Claude session, which only has this
+// token-scoped connector as a door into Supabase (no service-role
+// access, by design — that's what keeps one client's session from ever
+// touching another client's data). Without this tool, a sweep protocol's
+// last real step ("save the finished HTML") had nothing to call. Upserts
+// by (client_id, sweep_name), same pattern as set_my_sweep_time.
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -146,6 +156,7 @@ const TOOLS = [
   { name: "get_reference_document", description: "Fetches one reference document (template, module spec, question order, etc.) by its exact instruction_id, for a protocol to build from. Only returns documents explicitly marked client-readable — an internal/admin document (e.g. server architecture, protocol logs) returns not found, same as a name that doesn't exist.", inputSchema: { type: "object", properties: { instruction_id: { type: "string", description: "exact id, e.g. REF-command-center-html-template-v2-20260824" } }, required: ["instruction_id"] } },
   { name: "get_my_sweeps", description: "Returns the caller's own custom scheduled sweeps (sweep_schedules, active rows only), each joined to its most recent actual run (protocol_runs) so the caller can tell what SHOULD happen from what ACTUALLY happened. Does not include the universal Virtual Team Playbooks row, which is static and not scheduled.", inputSchema: { type: "object", properties: {} } },
   { name: "get_my_sweep_output", description: "Returns the caller's own finished sweep output (sweep_outputs) for a given sweep_name — the pre-rendered HTML panel document produced the last time that sweep ran, plus when it was rendered. This is a FETCH only — it never triggers a sweep to run. found:false if that sweep has never produced output yet.", inputSchema: { type: "object", properties: { sweep_name: { type: "string", description: "exact sweep_name, e.g. \"Weekly Sweep\" — must match a name from get_my_sweeps" } }, required: ["sweep_name"] } },
+  { name: "save_my_sweep_output", description: "Write tool. Saves the caller's own finished sweep HTML to sweep_outputs — the last content step of running a sweep protocol, called by the protocol itself once it has fully composed the panel HTML. Upserts by (client_id, sweep_name): each sweep holds only its latest render, never a history. Call notify_sweep_complete AFTER this succeeds, never before — the two-event model requires the output to exist before the client is told it's ready.", inputSchema: { type: "object", properties: { sweep_name: { type: "string", description: "exact sweep_name, e.g. \"Weekly Sweep\" — must match a name from get_my_sweeps" }, title: { type: "string", description: "short display title for the rendered sweep, e.g. \"Weekly Sweep — Sep 8\"" }, html: { type: "string", description: "the complete, finished panel-formatted HTML document for this sweep" } }, required: ["sweep_name", "html"] } },
   { name: "notify_sweep_complete", description: "Write tool. Sends the caller's own completion Circle DM for a finished sweep — a short text message plus a link, via Circle's Admin API (same mechanism cos-membership-server uses for playbook/review delivery). Call this as the LAST step of a sweep protocol, after the HTML has already been written to sweep_outputs. Does not render or fetch the sweep itself.", inputSchema: { type: "object", properties: { sweep_name: { type: "string", description: "e.g. \"Weekly Sweep\"" }, summary_text: { type: "string", description: "one or two short sentences describing what's ready, e.g. \"Your Weekly Sweep for Sep 8 is ready.\"" }, sweep_url: { type: "string", description: "optional link to open the sweep (e.g. a hosted page URL); omitted if the sweep is chat-fetch only" } }, required: ["sweep_name", "summary_text"] } },
   { name: "capture_note", description: "Write tool. Captures a decision, follow-up, or contact-update note, scoped to the caller's own client_id.", inputSchema: { type: "object", properties: { note_content: { type: "string" }, tags: { type: "string" } }, required: ["note_content"] } },
   { name: "set_my_sweep_time", description: "Write tool. Sets the scheduled day/time for one of the caller's own sweeps in sweep_schedules, scoped to the caller's own client_id. Upserts by (client_id, sweep_name).", inputSchema: { type: "object", properties: { sweep_name: { type: "string", description: "e.g. Content Sweep" }, scheduled_time: { type: "string", description: "HH:MM:SS, 24-hour" }, scheduled_days: { type: "array", items: { type: "string" }, description: "e.g. [\"Monday\"]" }, timezone: { type: "string", description: "e.g. America/New_York, optional, defaults to caller's existing timezone" } }, required: ["sweep_name", "scheduled_time", "scheduled_days"] } },
@@ -382,6 +393,34 @@ async function callTool(name, args, client, supabase) {
       if (error) throw new Error(error.message);
       if (!data) return { found: false, sweep_name };
       return { found: true, ...data };
+    }
+
+    case "save_my_sweep_output": {
+      // NEW 2026-09-08 — the write half of the two-event sweep model.
+      // A client's own Cowork scheduled task runs a sweep protocol INSIDE
+      // the client's own Claude session, which has no path to Supabase
+      // except this token-scoped connector (no service-role access, by
+      // design). This is that path for the "save the finished HTML" step.
+      // Upserts by (client_id, sweep_name) — sweep_outputs holds only the
+      // latest render per sweep, per its own UNIQUE constraint, so this
+      // deliberately overwrites rather than accumulating history.
+      const { sweep_name, title, html } = args;
+      if (!sweep_name) throw new Error("sweep_name is required");
+      if (!html) throw new Error("html is required");
+      const row = {
+        client_id: client.id,
+        sweep_name,
+        html,
+        rendered_at: new Date().toISOString(),
+      };
+      if (title) row.title = title;
+      const { data, error } = await supabase
+        .from("sweep_outputs")
+        .upsert(row, { onConflict: "client_id,sweep_name" })
+        .select("sweep_name, title, rendered_at, updated_at")
+        .single();
+      if (error) throw new Error(error.message);
+      return { success: true, ...data };
     }
 
     case "notify_sweep_complete": {
