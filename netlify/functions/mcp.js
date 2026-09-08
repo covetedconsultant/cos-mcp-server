@@ -21,6 +21,12 @@
 // the CURRENT production server before this file was written. Tools that
 // could not be safely live-tested (writes, admin-only, parameterized) are
 // marked UNVERIFIED below and should be tested carefully post-deploy.
+//
+// 2026-09-08 — added get_my_sweep_output (reads sweep_outputs). Part of
+// building co-32 (Weekly Sweep) / co-33 (Chain Sweep): the fetch half of
+// the two-event sweep model settled in sweep-architecture-decisions-
+// 2026-09-08. notify_sweep_complete (Circle DM) intentionally NOT added
+// here — see that commit message / LOG-co-server-sync for why.
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -123,6 +129,7 @@ const TOOLS = [
   { name: "get_my_weekly_plan", description: "Returns the caller's most recent weekly planning report (weekly_planning_reports table).", inputSchema: { type: "object", properties: {} } },
   { name: "get_reference_document", description: "Fetches one reference document (template, module spec, question order, etc.) by its exact instruction_id, for a protocol to build from. Only returns documents explicitly marked client-readable — an internal/admin document (e.g. server architecture, protocol logs) returns not found, same as a name that doesn't exist.", inputSchema: { type: "object", properties: { instruction_id: { type: "string", description: "exact id, e.g. REF-command-center-html-template-v2-20260824" } }, required: ["instruction_id"] } },
   { name: "get_my_sweeps", description: "Returns the caller's own custom scheduled sweeps (sweep_schedules, active rows only), each joined to its most recent actual run (protocol_runs) so the caller can tell what SHOULD happen from what ACTUALLY happened. Does not include the universal Virtual Team Playbooks row, which is static and not scheduled.", inputSchema: { type: "object", properties: {} } },
+  { name: "get_my_sweep_output", description: "Returns the caller's own finished sweep output (sweep_outputs) for a given sweep_name — the pre-rendered HTML panel document produced the last time that sweep ran, plus when it was rendered. This is a FETCH only — it never triggers a sweep to run. found:false if that sweep has never produced output yet.", inputSchema: { type: "object", properties: { sweep_name: { type: "string", description: "exact sweep_name, e.g. \"Weekly Sweep\" — must match a name from get_my_sweeps" } }, required: ["sweep_name"] } },
   { name: "capture_note", description: "Write tool. Captures a decision, follow-up, or contact-update note, scoped to the caller's own client_id.", inputSchema: { type: "object", properties: { note_content: { type: "string" }, tags: { type: "string" } }, required: ["note_content"] } },
   { name: "set_my_sweep_time", description: "Write tool. Sets the scheduled day/time for one of the caller's own sweeps in sweep_schedules, scoped to the caller's own client_id. Upserts by (client_id, sweep_name).", inputSchema: { type: "object", properties: { sweep_name: { type: "string", description: "e.g. Content Sweep" }, scheduled_time: { type: "string", description: "HH:MM:SS, 24-hour" }, scheduled_days: { type: "array", items: { type: "string" }, description: "e.g. [\"Monday\"]" }, timezone: { type: "string", description: "e.g. America/New_York, optional, defaults to caller's existing timezone" } }, required: ["sweep_name", "scheduled_time", "scheduled_days"] } },
   { name: "set_my_quarter", description: "Write tool. Copies a quarter's dates onto the caller's own review_schedule row. Upserts by (client_id, quarter, year).", inputSchema: { type: "object", properties: { quarter: { type: "string" }, year: { type: "number" }, starts_on: { type: "string" }, ends_on: { type: "string" }, day_1_date: { type: "string" }, day_2_date: { type: "string" }, day_3_date: { type: "string" }, day_4_date: { type: "string" } }, required: ["quarter", "year", "starts_on", "ends_on", "day_1_date", "day_2_date"] } },
@@ -339,6 +346,25 @@ async function callTool(name, args, client, supabase) {
         timezone: s.timezone,
         last_ran: lastRunByProtocol[s.protocol_id] || null,
       }));
+    }
+
+    case "get_my_sweep_output": {
+      // NEW 2026-09-08 — the fetch half of the two-event sweep model
+      // (sweep-architecture-decisions-2026-09-08, item 3). A client asking
+      // for a sweep is ALWAYS a read of the last-rendered row here — never
+      // a re-run of the protocol. sweep_outputs has UNIQUE(client_id,
+      // sweep_name), so this is always "the latest," never a history list.
+      const { sweep_name } = args;
+      if (!sweep_name) throw new Error("sweep_name is required");
+      const { data, error } = await supabase
+        .from("sweep_outputs")
+        .select("sweep_name, title, html, rendered_at, updated_at")
+        .eq("client_id", client.id)
+        .eq("sweep_name", sweep_name)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!data) return { found: false, sweep_name };
+      return { found: true, ...data };
     }
 
     case "get_my_weekly_plan": {
@@ -811,8 +837,7 @@ async function callTool(name, args, client, supabase) {
 
       const { data: roster, error: rosterErr } = await supabase
         .from("clients")
-        .select("id, name, email, tier, status, company_name")
-        .eq("status", "active");
+        .select("id, name, email, tier, status, company_name");
       if (rosterErr) throw new Error(rosterErr.message);
 
       return { weekly_rows: rows || [], active_clients: roster || [] };
